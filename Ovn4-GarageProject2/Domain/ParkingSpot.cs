@@ -17,6 +17,7 @@ public class ParkingSpot : GarageCell
     public bool IsEmpty => _subslots.All(s => s is null);
     public bool IsMotorcycleMode => _subslots[0] is Motorcycle;
     public bool CanMerge => IsEmpty && !IsMotorcycleMode;
+    public bool IsReserved { get; set; }
 
     public bool TryPark(Vehicle vehicle)
     {

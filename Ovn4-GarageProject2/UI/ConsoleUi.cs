@@ -1,5 +1,6 @@
 using Ovn4_GarageProject2.Handler;
 using Terminal.Gui.App;
+using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
 
 namespace Ovn4_GarageProject2.UI;
@@ -25,8 +26,18 @@ public class ConsoleUi : IUi
                 ])
             ]
         };
+
+        var mapText = string.Join("\n", SymbolRenderer.Render(_handler.GetGrid()));
+        var mapView = new TextView
+        {
+            Text = mapText,
+            ReadOnly = true,
+            X = 0, Y = 1,
+            Width = Dim.Fill(),
+            Height = Dim.Fill(),
+        };
         var win = new Window { Title = "Garage 2.0" };
-        win.Add(menu);
+        win.Add(menu, mapView);
         app.Run(win);
         win.Dispose();
     }

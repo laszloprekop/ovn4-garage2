@@ -8,6 +8,8 @@ public class GarageHandler : IHandler
 
     public void SetGarage(IGarage garage) => _garage = garage;
 
+    public Domain.GarageCell[,] GetGrid() => _garage?.GetGrid() ?? new Domain.GarageCell[0, 0];
+
     public bool ParkAtSpot(int spotId, Vehicle vehicle)
     {
         if (_garage is null) return false;
