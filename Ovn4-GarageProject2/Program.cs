@@ -1,3 +1,7 @@
-﻿// See https://aka.ms/new-console-template for more information
+﻿using Ovn4_GarageProject2;
+using Ovn4_GarageProject2.Handler;
+using Ovn4_GarageProject2.UI;
 
-Console.WriteLine("Hello, World!");
+var handler = new GarageHandler();
+var ui = new ConsoleUi(handler);
+new Manager(ui).Run();
