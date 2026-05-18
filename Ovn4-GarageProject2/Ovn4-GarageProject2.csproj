@@ -9,9 +9,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <Folder Include="Handler\"/>
         <Folder Include="Layouts\"/>
-        <Folder Include="UI\"/>
         <PackageReference Include="Terminal.Gui" Version="2.*"/>
     </ItemGroup>
 
