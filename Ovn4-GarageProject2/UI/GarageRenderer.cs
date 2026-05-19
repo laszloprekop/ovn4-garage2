@@ -221,8 +221,8 @@ public static class GarageRenderer
     static readonly string[] VertResv_Down_EV     = ["⌜  ⌝", " ┌╮ ", " ├╯ ", " ╵  ", "⌞↯ ⌟"];
 
     // Vertical 4×5 — occupied (car outline)
-    static readonly string[] VertParked_NoEV      = ["⌜  ⌝", " ┌─ ", " │  ", " └─ ", "⌞  ⌟"];
-    static readonly string[] VertParked_EV        = ["⌜ ↯⌝", " ┌─ ", " │  ", " └─ ", "⌞  ⌟"];
+    static readonly string[] VertParked_NoEV      = ["╭──╮", "╿⌜⌝╿", "│██│", "╽  ╽", "╰╶╴╯"];
+    static readonly string[] VertParked_EV      = ["╭──╮", "╿⌜⌝╿", "│██│", "╽↯ ╽", "╰╶╴╯"];
 
     // ── Glyph tables — horizontal 9×3 ────────────────────────────────────
 

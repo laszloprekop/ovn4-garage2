@@ -1,5 +1,6 @@
 namespace Ovn4_GarageProject2.UI;
 
+using System.Drawing;
 using Terminal.Gui.Drawing;
 using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
@@ -9,7 +10,11 @@ using Ovn4_GarageProject2.Domain;
 // Separator/wall columns and rows collapse to 1 terminal cell in that dimension.
 public class GarageMapView : View
 {
-    public GarageMapView(GarageCell[,] grid) => Rebuild(grid);
+    public GarageMapView(GarageCell[,] grid)
+    {
+        ViewportSettings = ViewportSettingsFlags.HasScrollBars;
+        Rebuild(grid);
+    }
 
     public void Rebuild(GarageCell[,] grid)
     {
@@ -81,6 +86,9 @@ public class GarageMapView : View
             }
         }
 
+        int totalW = colX[cols - 1] + colW[cols - 1];
+        int totalH = rowY[rows - 1] + rowH[rows - 1];
+        SetContentSize(new Size(totalW, totalH));
         SetNeedsDraw();
     }
 }

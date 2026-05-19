@@ -12,6 +12,11 @@ public class ConsoleUi : IUi
 
     public void Start()
     {
+        // Request terminal resize before TG2 init so it sees the new size.
+        // Works in Terminal.app / iTerm2; ignored in JetBrains embedded panel.
+        Console.Write("\x1b[8;48;160t");
+        System.Threading.Thread.Sleep(50);
+
         using IApplication app = Application.Create().Init();
 
         var mapView = new GarageMapView(_handler.GetGrid())
