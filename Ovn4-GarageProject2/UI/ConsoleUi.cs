@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using Ovn4_GarageProject2.Handler;
 using Terminal.Gui.App;
 using Terminal.Gui.ViewBase;
@@ -15,7 +16,7 @@ public class ConsoleUi : IUi
         // Request terminal resize before TG2 init so it sees the new size.
         // Works in Terminal.app / iTerm2; ignored in JetBrains embedded panel.
         Console.Write("\x1b[8;48;160t");
-        System.Threading.Thread.Sleep(50);
+        Thread.Sleep(50);
 
         using IApplication app = Application.Create().Init();
 
@@ -42,15 +43,27 @@ public class ConsoleUi : IUi
             [
                 new MenuBarItem("_Garage",
                 [
-                    new MenuItem("_List Vehicles", "",
-                        () => MessageBox.Query(app, "Vehicles",
-                            $"Parked: {_handler.GetAllVehicles().Count()}", "OK")),
+                    new MenuItem("_List Vehicles", "", () =>
+                    {
+                        var items = _handler.GetAllVehicles()
+                            .Select(v => $"{v.RegNumber,-10} {v.GetType().Name,-12} {v.Colour,-10} {v.WheelCount} wheel(s)")
+                            .ToList();
+
+                        var dialog = new Dialog { Title = "Parked Vehicles", Width = 60, Height = 20 };
+                        var list = new ListView { Width = Dim.Fill(), Height = Dim.Fill() - 2 };
+                        list.SetSource(new ObservableCollection<string>(items));
+                        var close = new Button { Text = "Close", X = Pos.Center(), Y = Pos.Bottom(list) };
+
+                        close.Accepting += (_, _) => app.RequestStop(null);
+                        dialog.Add(list, close);
+                        app.Run(dialog);
+                    }),
                     new MenuItem("_Toggle Renderer", "",
                         () =>
                         {
                             showingSprite = !showingSprite;
                             spriteView.Visible = showingSprite;
-                            mapView.Visible    = !showingSprite;
+                            mapView.Visible = !showingSprite;
                         }),
                     new MenuItem("_Quit", "", () => app.RequestStop(null))
                 ])
