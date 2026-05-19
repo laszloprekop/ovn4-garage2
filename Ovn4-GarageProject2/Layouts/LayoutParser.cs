@@ -20,7 +20,7 @@ public static class LayoutParser
             grid[r, c] = ch switch
             {
                 '░' => new WallCell(),
-                _ when RoadChars.Contains(ch) => new RoadCell(),
+                _ when RoadChars.Contains(ch) => new RoadCell { Glyph = ch },
                 _ => CreateSpot(ch, r, c, cols),
             };
         }

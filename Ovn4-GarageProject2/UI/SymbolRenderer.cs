@@ -22,9 +22,9 @@ public static class SymbolRenderer
                 top.Append($"{sym}{fill}");
                 bottom.Append(grid[row, col] switch
                 {
-                    WallCell    => "░░",
+                    WallCell => "░░",
                     ParkingSpot => "··",
-                    _           => "  ",
+                    _ => "  ",
                 });
             }
 
@@ -35,6 +35,9 @@ public static class SymbolRenderer
         return lines;
     }
 
+    // Horizontal road glyphs that extend right across the fill column.
+    private static readonly HashSet<char> HExtenders = ['─', '├', '┤', '┼', '┬', '┴'];
+
     // Returns sym (col*2) and fill (col*2+1), both Width=1 in GarageMapView.
     // sym  → reservation flag / vehicle-type hint / occupation state
     // fill → base type glyph, overridden by more specific conditions (earlier cases win)
@@ -42,17 +45,19 @@ public static class SymbolRenderer
     {
         char fill = cell switch
         {
-            null or RoadCell                   => ' ',   // road / void
-            WallCell                           => '░',   // solid wall
-            ParkingSpot { HasEvCharger: true } => '↯',  // EV overrides plain bay
-            ParkingSpot                        => '·',   // empty bay
-            _                                  => ' ',
+            RoadCell { Glyph: var g } when HExtenders.Contains(g) => '─', // horizontal separators double up
+            null or RoadCell => ' ', // road / void
+            WallCell => '░', // solid wall
+            ParkingSpot { HasEvCharger: true } => '↯', // EV overrides plain bay
+            ParkingSpot { IsEmpty: true } => '·', // empty bay
+            ParkingSpot { IsEmpty: false } => '·', // occupied bay
+            _ => ' ',
         };
         var (attr, sym) = cell switch
         {
             null => (Palette.Road, 'x'),
             WallCell => (Palette.Wall, '░'),
-            RoadCell => (Palette.Road, ' '),
+            RoadCell { Glyph: var g } => (Palette.Road, g),
             // Reserved — check before occupation
             ParkingSpot { IsReserved: true } s when !s.IsEmpty && s.HasEvCharger => (Palette.ResvParkedEv, 'P'),
             ParkingSpot { IsReserved: true } s when !s.IsEmpty => (Palette.ResvParked, 'P'),
@@ -81,7 +86,7 @@ public static class SymbolRenderer
         public static readonly Attribute Parked = new(ColorName16.DarkGray, ColorName16.Green);
         public static readonly Attribute ParkedEv = new(ColorName16.Blue, ColorName16.Green);
         public static readonly Attribute ResvEmpty = new(ColorName16.DarkGray, ColorName16.Black);
-        public static readonly Attribute ResvEmptyEv = new(ColorName16.BrightBlue, ColorName16.Blue);
+        public static readonly Attribute ResvEmptyEv = new(ColorName16.BrightBlue, ColorName16.Black);
         public static readonly Attribute ResvParked = new(ColorName16.Black, ColorName16.Green);
         public static readonly Attribute ResvParkedEv = new(ColorName16.Blue, ColorName16.Green);
     }
