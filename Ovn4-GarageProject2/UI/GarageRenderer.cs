@@ -25,6 +25,9 @@ using Domain;
 /// </remarks>
 public static partial class GarageRenderer
 {
+    /// <summary>The character-space bounding rectangle of a single parking spot, used for highlight overlays.</summary>
+    public record SpotHighlight(int CharRow, int CharCol, int CharHeight, int CharWidth);
+
     /// <summary>
     /// Renders <paramref name="grid"/> into an array of text lines ready for terminal display.
     /// </summary>
@@ -36,6 +39,33 @@ public static partial class GarageRenderer
         var buffer = AllocateBuffer(plan);
         WriteToBuffer(grid, plan, buffer);
         return BufferToLines(buffer);
+    }
+
+    /// <summary>
+    /// Renders <paramref name="grid"/> and also returns the character-space rectangle of the spot
+    /// with <paramref name="highlightSpotId"/>, so the caller can apply a colour overlay to that region.
+    /// </summary>
+    /// <returns>The rendered lines and the highlight rectangle, or <see langword="null"/> if the spot is not found.</returns>
+    public static (string[] Lines, SpotHighlight? Highlight) RenderWithHighlight(
+        GarageCell[,] grid, int highlightSpotId)
+    {
+        var plan = BuildRenderPlan(grid);
+        var buffer = AllocateBuffer(plan);
+        WriteToBuffer(grid, plan, buffer);
+        var lines = BufferToLines(buffer);
+
+        int logRows = grid.GetLength(0), logCols = grid.GetLength(1);
+        for (int r = 0; r < logRows; r++)
+        for (int c = 0; c < logCols; c++)
+        {
+            if (grid[r, c] is ParkingSpot { Id: var id } && id == highlightSpotId)
+            {
+                var rect = plan[(r, c)];
+                return (lines, new SpotHighlight(rect.CharRow, rect.CharCol, rect.CharHeight, rect.CharWidth));
+            }
+        }
+
+        return (lines, null);
     }
 
     // ── Render plan ───────────────────────────────────────────────────────
@@ -86,9 +116,9 @@ public static partial class GarageRenderer
         }
 
         int laneW = hasHoriz ? 10 : hasVert ? 5 : 1;
-        int laneH = hasVert  ?  5 : hasHoriz ? 3 : 1;
+        int laneH = hasVert ? 5 : hasHoriz ? 3 : 1;
 
-        // Snapshot initial colW so the row-pass can identify spot columns unambiguously.
+        // Snapshot initial colW so the row-pass can identify spot columns.
         var spotColW = (int[])colW.Clone();
 
         // Expand lane columns: a lane column has a plain-road cell in a spot row (rowH > 1).
@@ -100,8 +130,8 @@ public static partial class GarageRenderer
             bool hasParking = false, isLaneCol = false;
             for (int r = 0; r < logRows; r++)
             {
-                if (grid[r, c] is ParkingSpot)                              hasParking = true;
-                if (rowH[r] > 1 && grid[r, c] is RoadCell { Glyph: ' ' }) isLaneCol  = true;
+                if (grid[r, c] is ParkingSpot) hasParking = true;
+                if (rowH[r] > 1 && grid[r, c] is RoadCell { Glyph: ' ' }) isLaneCol = true;
             }
 
             if (!hasParking && isLaneCol) colW[c] = laneW;
@@ -116,9 +146,9 @@ public static partial class GarageRenderer
             bool hasParking = false, hasSep = false, isLaneRow = false;
             for (int c = 0; c < logCols; c++)
             {
-                if (CharHeight(grid[r, c]) > 1)                                hasParking = true;
-                if (grid[r, c] is RoadCell rc && IsSeparatorGlyph(rc.Glyph))  hasSep     = true;
-                if (spotColW[c] > 1 && grid[r, c] is RoadCell { Glyph: ' ' }) isLaneRow  = true;
+                if (CharHeight(grid[r, c]) > 1) hasParking = true;
+                if (grid[r, c] is RoadCell rc && IsSeparatorGlyph(rc.Glyph)) hasSep = true;
+                if (spotColW[c] > 1 && grid[r, c] is RoadCell { Glyph: ' ' }) isLaneRow = true;
             }
 
             if (!hasParking && !hasSep && isLaneRow) rowH[r] = laneH;
@@ -164,18 +194,18 @@ public static partial class GarageRenderer
     private static int CharHeight(GarageCell? cell) => cell switch
     {
         ParkingSpot { AllowedVehicleType: var t } when t == typeof(Bus) => 1,
-        ParkingSpot { Orientation: Orientation.Vertical }               => 5,
-        ParkingSpot { Orientation: Orientation.Horizontal }             => 3,
-        _                                                               => 1,
+        ParkingSpot { Orientation: Orientation.Vertical } => 5,
+        ParkingSpot { Orientation: Orientation.Horizontal } => 3,
+        _ => 1,
     };
 
     /// <summary>Returns the character width of <paramref name="cell"/>'s sprite.</summary>
     private static int CharWidth(GarageCell? cell) => cell switch
     {
         ParkingSpot { AllowedVehicleType: var t } when t == typeof(Bus) => 1,
-        ParkingSpot { Orientation: Orientation.Vertical }               => 4,
-        ParkingSpot { Orientation: Orientation.Horizontal }             => 9,
-        _                                                               => 1,
+        ParkingSpot { Orientation: Orientation.Vertical } => 4,
+        ParkingSpot { Orientation: Orientation.Horizontal } => 9,
+        _ => 1,
     };
 
     // ── Buffer ────────────────────────────────────────────────────────────
@@ -243,12 +273,12 @@ public static partial class GarageRenderer
     private static string[] GetGlyph(GarageCell[,] grid, int r, int c) =>
         grid[r, c] switch
         {
-            WallCell                                                    => ["░"],
-            RoadCell { Glyph: var g } when g != ' '                    => [$"{g}"],
-            RoadCell                                                    => [" "],
+            WallCell => ["░"],
+            RoadCell { Glyph: var g } when g != ' ' => [$"{g}"],
+            RoadCell => [" "],
             ParkingSpot { AllowedVehicleType: var t } when t == typeof(Bus) => ["B"],
-            ParkingSpot spot                                            => GetSpotGlyph(spot, grid, r, c),
-            _                                                           => [" "],
+            ParkingSpot spot => GetSpotGlyph(spot, grid, r, c),
+            _ => [" "],
         };
 
     /// <summary>
@@ -264,23 +294,23 @@ public static partial class GarageRenderer
         return (spot.Orientation, facing, spot.IsReserved, spot.HasEvCharger) switch
         {
             // Vertical 4×5
-            (Orientation.Vertical, Facing.Up,   false, false) => VertEmptyUpNoEv,
-            (Orientation.Vertical, Facing.Up,   false, true)  => VertEmptyUpEv,
-            (Orientation.Vertical, Facing.Up,   true,  false) => VertResvUpNoEv,
-            (Orientation.Vertical, Facing.Up,   true,  true)  => VertResvUpEv,
-            (Orientation.Vertical, Facing.Down, false, false)  => VertEmptyDownNoEv,
-            (Orientation.Vertical, Facing.Down, false, true)   => VertEmptyDownEv,
-            (Orientation.Vertical, Facing.Down, true,  false)  => VertResvDownNoEv,
-            (Orientation.Vertical, Facing.Down, true,  true)   => VertResvDownEv,
+            (Orientation.Vertical, Facing.Up, false, false) => VertEmptyUpNoEv,
+            (Orientation.Vertical, Facing.Up, false, true) => VertEmptyUpEv,
+            (Orientation.Vertical, Facing.Up, true, false) => VertResvUpNoEv,
+            (Orientation.Vertical, Facing.Up, true, true) => VertResvUpEv,
+            (Orientation.Vertical, Facing.Down, false, false) => VertEmptyDownNoEv,
+            (Orientation.Vertical, Facing.Down, false, true) => VertEmptyDownEv,
+            (Orientation.Vertical, Facing.Down, true, false) => VertResvDownNoEv,
+            (Orientation.Vertical, Facing.Down, true, true) => VertResvDownEv,
             // Horizontal 9×3
             (Orientation.Horizontal, Facing.Right, false, false) => HorizEmptyRightNoEv,
-            (Orientation.Horizontal, Facing.Right, false, true)  => HorizEmptyRightEv,
-            (Orientation.Horizontal, Facing.Right, true,  false) => HorizResvRightNoEv,
-            (Orientation.Horizontal, Facing.Right, true,  true)  => HorizResvRightEv,
-            (Orientation.Horizontal, Facing.Left,  false, false) => HorizEmptyLeftNoEv,
-            (Orientation.Horizontal, Facing.Left,  false, true)  => HorizEmptyLeftEv,
-            (Orientation.Horizontal, Facing.Left,  true,  false) => HorizResvLeftNoEv,
-            (Orientation.Horizontal, Facing.Left,  true,  true)  => HorizResvLeftEv,
+            (Orientation.Horizontal, Facing.Right, false, true) => HorizEmptyRightEv,
+            (Orientation.Horizontal, Facing.Right, true, false) => HorizResvRightNoEv,
+            (Orientation.Horizontal, Facing.Right, true, true) => HorizResvRightEv,
+            (Orientation.Horizontal, Facing.Left, false, false) => HorizEmptyLeftNoEv,
+            (Orientation.Horizontal, Facing.Left, false, true) => HorizEmptyLeftEv,
+            (Orientation.Horizontal, Facing.Left, true, false) => HorizResvLeftNoEv,
+            (Orientation.Horizontal, Facing.Left, true, true) => HorizResvLeftEv,
             _ => ["?"],
         };
     }
@@ -291,17 +321,23 @@ public static partial class GarageRenderer
     private static string[] GetOccupiedGlyph(ParkingSpot spot) =>
         (spot.Orientation, spot.HasEvCharger) switch
         {
-            (Orientation.Vertical,   false) => VertParkedNoEv,
-            (Orientation.Vertical,   true)  => VertParkedEv,
+            (Orientation.Vertical, false) => VertParkedNoEv,
+            (Orientation.Vertical, true) => VertParkedEv,
             (Orientation.Horizontal, false) => HorizParkedNoEv,
-            (Orientation.Horizontal, true)  => HorizParkedEv,
+            (Orientation.Horizontal, true) => HorizParkedEv,
             _ => ["?"],
         };
 
     // ── Facing inference ──────────────────────────────────────────────────
 
     /// <summary>The direction a driver faces when entering a parking spot from the road.</summary>
-    private enum Facing { Up, Down, Left, Right }
+    private enum Facing
+    {
+        Up,
+        Down,
+        Left,
+        Right
+    }
 
     /// <summary>
     /// Infers the entry-facing direction for <paramref name="spot"/> by inspecting its neighbours.
@@ -323,14 +359,14 @@ public static partial class GarageRenderer
             return spot.Id % 2 == 0 ? Facing.Up : Facing.Down;
         }
 
-        bool wallLeft  = HasWallBefore(grid, r, c, dr: 0, dc: -1);
+        bool wallLeft = HasWallBefore(grid, r, c, dr: 0, dc: -1);
         bool wallRight = HasWallBefore(grid, r, c, dr: 0, dc: +1);
-        if (wallLeft  && !wallRight) return Facing.Left;
-        if (wallRight && !wallLeft)  return Facing.Right;
-        bool roadLeft  = IsRoad(grid, r, c - 1);
+        if (wallLeft && !wallRight) return Facing.Left;
+        if (wallRight && !wallLeft) return Facing.Right;
+        bool roadLeft = IsRoad(grid, r, c - 1);
         bool roadRight = IsRoad(grid, r, c + 1);
-        if (roadLeft  && !roadRight) return Facing.Right;
-        if (roadRight && !roadLeft)  return Facing.Left;
+        if (roadLeft && !roadRight) return Facing.Right;
+        if (roadRight && !roadLeft) return Facing.Left;
         return spot.Id % 2 == 0 ? Facing.Right : Facing.Left;
     }
 
@@ -355,7 +391,7 @@ public static partial class GarageRenderer
         int nr = r + dr, nc = c + dc;
         while (nr >= 0 && nr < rows && nc >= 0 && nc < cols)
         {
-            if (grid[nr, nc] is WallCell)    return true;
+            if (grid[nr, nc] is WallCell) return true;
             if (grid[nr, nc] is ParkingSpot) return false;
             nr += dr;
             nc += dc;

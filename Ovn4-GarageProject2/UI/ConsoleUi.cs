@@ -84,17 +84,27 @@ public class ConsoleUi : IUi
                         var okButton = new Button { Text = "Park", X = 1, Y = 10 };
                         var cancelButton = new Button { Text = "Cancel", X = 10, Y = 10 };
 
+                        int? parkedSpotId = null;
                         okButton.Accepting += (_, _) =>
                         {
                             var vehicle = CreateVehicle(types[typeList.SelectedItem ?? 0], regField.Text);
-                            bool ok = _handler.Park(vehicle);
+                            parkedSpotId = _handler.Park(vehicle);
                             app.RequestStop(null);
-                            MessageBox.Query(app, "Result", ok ? "Vehicle parked." : "Could not park vehicle.", "OK");
+                            MessageBox.Query(app, "Result",
+                                parkedSpotId.HasValue ? "Vehicle parked." : "Could not park vehicle.", "OK");
                         };
                         cancelButton.Accepting += (_, _) => app.RequestStop(null);
 
                         dialog.Add(typeLabel, typeList, regLabel, regField, okButton, cancelButton);
                         app.Run(dialog);
+
+                        if (parkedSpotId.HasValue)
+                        {
+                            var (lines, highlight) = GarageRenderer.RenderWithHighlight(
+                                _handler.GetGrid(), parkedSpotId.Value);
+                            spriteView.Rebuild(lines, highlight);
+                            mapView.Rebuild(_handler.GetGrid());
+                        }
                     }, null),
                     new MenuItem("_Toggle Renderer", "", () =>
                     {

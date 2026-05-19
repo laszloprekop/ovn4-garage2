@@ -37,29 +37,24 @@ public class GarageHandler : IHandler
             .Select(g => (Type: g.Key, Count: g.Count()))
         ?? Enumerable.Empty<(string, int)>();
 
-    public bool Park(Vehicle vehicle)
+    public int? Park(Vehicle vehicle)
     {
-        if (_garage is null) return false;
-        // Does Reg Number already exist?
+        if (_garage is null) return null;
         if (GetAllVehicles().Any(v => v.RegNumber.Equals(vehicle.RegNumber, StringComparison.OrdinalIgnoreCase)))
-            return false;
+            return null;
 
         var (width, height) = Footprints.GetValueOrDefault(vehicle.GetType(), (1, 1));
         Type? requiredZone = vehicle is Bus or Airplane ? vehicle.GetType() : null;
         var anchor = FindFreeSpot(width, height, requiredZone);
-        if (anchor is null) return false;
+        if (anchor is null) return null;
 
         var grid = _garage.GetGrid();
         for (int r = anchor.Row; r < anchor.Row + height; r++)
-        {
-            for (int c = anchor.Col; c < anchor.Col + width; c++)
-            {
-                if (grid[r, c] is ParkingSpot spot)
-                    spot.TryPark(vehicle);
-            }
-        }
+        for (int c = anchor.Col; c < anchor.Col + width; c++)
+            if (grid[r, c] is ParkingSpot spot)
+                spot.TryPark(vehicle);
 
-        return true;
+        return anchor.Id;
     }
 
     public ParkingSpot? FindFreeSpot(int width, int height, Type? requiredType = null)
