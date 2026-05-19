@@ -1,4 +1,5 @@
 namespace Ovn4_GarageProject2.Layouts;
+
 using Domain;
 
 public static class LayoutParser
@@ -18,9 +19,9 @@ public static class LayoutParser
             char ch = c < blueprint[r].Length ? blueprint[r][c] : ' ';
             grid[r, c] = ch switch
             {
-                '░'                           => new WallCell(),
+                '░' => new WallCell(),
                 _ when RoadChars.Contains(ch) => new RoadCell(),
-                _                             => CreateSpot(ch, r, c, cols),
+                _ => CreateSpot(ch, r, c, cols),
             };
         }
 
@@ -30,17 +31,18 @@ public static class LayoutParser
     private static ParkingSpot CreateSpot(char ch, int r, int c, int cols) =>
         new()
         {
-            Id                 = r * cols + c,
-            Row                = r,
-            Col                = c,
-            HasEvCharger       = ch is 'C' or 'P' or '4' or '5' or '6',
+            Id = r * cols + c,
+            Row = r,
+            Col = c,
+            HasEvCharger = ch is 'C' or 'P' or '4' or '5' or '6',
+            IsReserved = ch is 'p' or 'P',
             AllowedVehicleType = ch switch
             {
-                'b'                   => typeof(Bus),
-                'a'                   => typeof(Airplane),
+                'b' => typeof(Bus),
+                'a' => typeof(Airplane),
                 '1' or '2' or '3'
-                or '4' or '5' or '6'  => typeof(Motorcycle),
-                _                     => null,
+                    or '4' or '5' or '6' => typeof(Motorcycle),
+                _ => null,
             },
         };
 }

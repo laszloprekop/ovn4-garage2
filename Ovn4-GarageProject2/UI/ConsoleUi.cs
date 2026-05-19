@@ -27,11 +27,8 @@ public class ConsoleUi : IUi
             ]
         };
 
-        var mapText = string.Join("\n", SymbolRenderer.Render(_handler.GetGrid()));
-        var mapView = new TextView
+        var mapView = new GarageMapView(_handler.GetGrid())
         {
-            Text = mapText,
-            ReadOnly = true,
             X = 0, Y = 1,
             Width = Dim.Fill(),
             Height = Dim.Fill(),
