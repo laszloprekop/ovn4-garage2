@@ -46,7 +46,8 @@ public class ConsoleUi : IUi
                     new MenuItem("_List Vehicles", "", () =>
                     {
                         var items = _handler.GetAllVehicles()
-                            .Select(v => $"{v.RegNumber,-10} {v.GetType().Name,-12} {v.Colour,-10} {v.WheelCount} wheel(s)")
+                            .Select(v =>
+                                $"{v.RegNumber,-10} {v.GetType().Name,-12} {v.Colour,-10} {v.WheelCount} wheel(s)")
                             .ToList();
 
                         var dialog = new Dialog { Title = "Parked Vehicles", Width = 60, Height = 20 };
@@ -54,6 +55,18 @@ public class ConsoleUi : IUi
                         list.SetSource(new ObservableCollection<string>(items));
                         var close = new Button { Text = "Close", X = Pos.Center(), Y = Pos.Bottom(list) };
 
+                        close.Accepting += (_, _) => app.RequestStop(null);
+                        dialog.Add(list, close);
+                        app.Run(dialog);
+                    }),
+                    new MenuItem("Vehile _Type Summary", "", () =>
+                    {
+                        var items = _handler.GetVehicleTypeCounts()
+                            .Select(t => $"{t.Type,-15}: {t.Count}").ToList();
+                        var dialog = new Dialog { Title = "Vehicle Type Summary", Width = 40, Height = 15 };
+                        var list = new ListView { Width = Dim.Fill(), Height = Dim.Fill() - 2 };
+                        list.SetSource(new ObservableCollection<string>(items));
+                        var close = new Button { Text = "Close", X = Pos.Center(), Y = Pos.Bottom(list) };
                         close.Accepting += (_, _) => app.RequestStop(null);
                         dialog.Add(list, close);
                         app.Run(dialog);

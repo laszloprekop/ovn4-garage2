@@ -5,5 +5,6 @@ namespace Ovn4_GarageProject2.Handler;
 public interface IHandler
 {
     IEnumerable<Vehicle> GetAllVehicles();
-    Domain.GarageCell[,] GetGrid();
+    GarageCell[,] GetGrid();
+    IEnumerable<(string Type, int Count)> GetVehicleTypeCounts();
 }

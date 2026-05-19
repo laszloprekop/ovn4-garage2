@@ -21,4 +21,11 @@ public class GarageHandler : IHandler
 
     public IEnumerable<Vehicle> GetAllVehicles() =>
         _garage?.GetAll() ?? Enumerable.Empty<Vehicle>();
+
+    public IEnumerable<(string Type, int Count)> GetVehicleTypeCounts() =>
+        _garage?.GetAll()
+            .GroupBy(vehicle => vehicle.GetType().Name)
+            .Select(g => (Type: g.Key, Count: g.Count()))
+        ?? Enumerable.Empty<(string, int)>();
+
 }
