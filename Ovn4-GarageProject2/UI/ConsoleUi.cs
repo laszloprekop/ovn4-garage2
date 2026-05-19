@@ -13,6 +13,24 @@ public class ConsoleUi : IUi
     public void Start()
     {
         using IApplication app = Application.Create().Init();
+
+        var mapView = new GarageMapView(_handler.GetGrid())
+        {
+            X = 0, Y = 1,
+            Width = Dim.Fill(),
+            Height = Dim.Fill(),
+            Visible = false,
+        };
+
+        var spriteView = new SpriteView(GarageRenderer.Render(_handler.GetGrid()))
+        {
+            X = 0, Y = 1,
+            Width = Dim.Fill(),
+            Height = Dim.Fill(),
+        };
+
+        bool showingSprite = true;
+
         var menu = new MenuBar
         {
             Menus =
@@ -22,19 +40,20 @@ public class ConsoleUi : IUi
                     new MenuItem("_List Vehicles", "",
                         () => MessageBox.Query(app, "Vehicles",
                             $"Parked: {_handler.GetAllVehicles().Count()}", "OK")),
+                    new MenuItem("_Toggle Renderer", "",
+                        () =>
+                        {
+                            showingSprite = !showingSprite;
+                            spriteView.Visible = showingSprite;
+                            mapView.Visible    = !showingSprite;
+                        }),
                     new MenuItem("_Quit", "", () => app.RequestStop(null))
                 ])
             ]
         };
 
-        var mapView = new GarageMapView(_handler.GetGrid())
-        {
-            X = 0, Y = 1,
-            Width = Dim.Fill(),
-            Height = Dim.Fill(),
-        };
         var win = new Window { Title = "Garage 2.0" };
-        win.Add(menu, mapView);
+        win.Add(menu, mapView, spriteView);
         app.Run(win);
         win.Dispose();
     }
