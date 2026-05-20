@@ -203,7 +203,7 @@ public class ConsoleUi : IUi
                             var results = _handler.Search(colorField.Text?.Trim(), wheels, type)
                                 .Select(v => $"{v.RegNumber,-10} {v.GetType().Name,-12} {v.Colour}").ToList();
                             app.RequestStop(null);
-                            ShowList(app, "Search Results", results);
+                            ShowList(app, "Search Results", results.Count > 0 ? results : ["No results found."]);
                         }
 
                         okButton.Accepting += (_, _) => DoSearch();
