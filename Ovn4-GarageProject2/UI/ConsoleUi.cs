@@ -207,11 +207,28 @@ public class ConsoleUi : IUi
                     }, null),
                     new MenuItem("_Remove Vehicle", "", () =>
                     {
-                        var dialog = new Dialog { Title = "Remove Vehicle", Width = 44, Height = 10 };
-                        var regLabel = new Label { Text = "Registration number:", X = 1, Y = 1 };
-                        var regField = new TextField { X = 1, Y = 3, Width = 30 };
-                        var okButton = new Button { Text = "Remove", X = 1, Y = 6 };
-                        var cancelButton = new Button { Text = "Cancel", X = 11, Y = 6 };
+                        var parked = _handler.GetAllVehicles()
+                            .Select(v => $"{v.RegNumber,-10} {v.GetType().Name,-12} {v.Colour}")
+                            .ToList();
+
+                        var dialog = new Dialog { Title = "Remove Vehicle", Width = 50, Height = 16 };
+                        var listLabel = new Label { Text = "Parked vehicles:", X = 1, Y = 1 };
+                        var vehicleList = new ListView { X = 1, Y = 2, Width = Dim.Fill() - 2, Height = 7 };
+                        vehicleList.SetSource(new ObservableCollection<string>(
+                            parked.Count > 0 ? parked : ["(garage empty)"]));
+
+                        var regLabel = new Label { Text = "Reg. number:", X = 1, Y = 10 };
+                        var regField = new TextField { X = 15, Y = 10, Width = 20 };
+                        var okButton = new Button { Text = "Remove", X = 1, Y = 12 };
+                        var cancelButton = new Button { Text = "Cancel", X = 11, Y = 12 };
+
+                        if (parked.Count > 0)
+                            vehicleList.ValueChanged += (_, e) =>
+                            {
+                                if (e.NewValue is { } row && row < parked.Count)
+                                    regField.Text = _handler.GetAllVehicles()
+                                        .ElementAtOrDefault(row)?.RegNumber ?? "";
+                            };
 
                         bool removed = false;
 
@@ -233,7 +250,7 @@ public class ConsoleUi : IUi
                         regField.OnEnter(DoRemove);
                         cancelButton.Accepting += (_, _) => app.RequestStop(null);
 
-                        dialog.Add(regLabel, regField, okButton, cancelButton);
+                        dialog.Add(listLabel, vehicleList, regLabel, regField, okButton, cancelButton);
                         app.Run(dialog);
 
                         if (removed)
