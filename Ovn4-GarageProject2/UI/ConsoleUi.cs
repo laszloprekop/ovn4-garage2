@@ -200,7 +200,7 @@ public class ConsoleUi : IUi
                         {
                             string? wheels = int.TryParse(wheelsField.Text, out int w) ? w.ToString() : null;
                             Type? type = ResolveType(typeField.Text);
-                            var results = _handler.Search(colorField.Text, wheels, type)
+                            var results = _handler.Search(colorField.Text?.Trim(), wheels, type)
                                 .Select(v => $"{v.RegNumber,-10} {v.GetType().Name,-12} {v.Colour}").ToList();
                             app.RequestStop(null);
                             ShowList(app, "Search Results", results);
