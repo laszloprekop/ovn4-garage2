@@ -4,6 +4,8 @@ A C# console application that simulates a multi-type vehicle garage. Park, remov
 
 Built as a C# exercise focused on generics, interfaces, and separation of concerns.
 
+![demo](demo.png)
+
 ## Architecture decisions
 
 - **Program → Manager → IUI / IHandler:** `Manager` wires the UI and handler together; it only ever touches interfaces.
