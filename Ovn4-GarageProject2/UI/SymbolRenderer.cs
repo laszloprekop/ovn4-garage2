@@ -10,6 +10,7 @@ public static class SymbolRenderer
     {
         int rows = grid.GetLength(0);
         int cols = grid.GetLength(1);
+        var anchorIds = ZoneAnchorIds(grid);
         var lines = new string[rows * 2];
 
         for (int row = 0; row < rows; row++)
@@ -18,9 +19,19 @@ public static class SymbolRenderer
             var bottom = new System.Text.StringBuilder(cols * 2);
             for (int col = 0; col < cols; col++)
             {
-                var (_, sym, fill) = CellRendering(grid[row, col]);
+                var cell = grid[row, col];
+
+                // sub zone cells: render blank so the anchor's glyph reads as the zone symbol.
+                if (cell is ParkingSpot { ZoneId: > 0 } zs && !anchorIds.Contains(zs.Id))
+                {
+                    top.Append("  ");
+                    bottom.Append("  ");
+                    continue;
+                }
+
+                var (_, sym, fill) = CellRendering(cell);
                 top.Append($"{sym}{fill}");
-                bottom.Append(grid[row, col] switch
+                bottom.Append(cell switch
                 {
                     WallCell => "░░",
                     ParkingSpot => "··",
@@ -33,6 +44,23 @@ public static class SymbolRenderer
         }
 
         return lines;
+    }
+
+    // The zone anchor is the top-left cell of each zone: no zone-sibling directly above or to the left.
+    private static HashSet<int> ZoneAnchorIds(GarageCell[,] grid)
+    {
+        int rows = grid.GetLength(0), cols = grid.GetLength(1);
+        var anchors = new HashSet<int>();
+        for (int r = 0; r < rows; r++)
+        for (int c = 0; c < cols; c++)
+        {
+            if (grid[r, c] is not ParkingSpot { ZoneId: > 0 } spot) continue;
+            bool aboveSameZone = r > 0 && grid[r - 1, c] is ParkingSpot a && a.ZoneId == spot.ZoneId;
+            bool leftSameZone = c > 0 && grid[r, c - 1] is ParkingSpot l && l.ZoneId == spot.ZoneId;
+            if (!aboveSameZone && !leftSameZone) anchors.Add(spot.Id);
+        }
+
+        return anchors;
     }
 
     // Horizontal road glyphs that extend right across the fill column.
