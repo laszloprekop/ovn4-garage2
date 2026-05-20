@@ -15,4 +15,5 @@ public interface IHandler
     int? Park(Vehicle vehicle);
     bool Remove(string regNumber);
     Vehicle? FindByReg(string regNumber);
+    IEnumerable<Vehicle> Search(string? colour, string? wheelCount, Type? vehicleType);
 }
