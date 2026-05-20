@@ -118,6 +118,63 @@ public static partial class GarageRenderer
         "╰╶╴╯"
     ];
 
+    // ── Motorcycle sub-slots — 4×5 ───────────────────────────────────────
+    // Each row 1-3 represents one sub-slot: ⊛⊛ = occupied, ╌╌ = empty.
+
+    static readonly string[] VertMoto1NoEv =
+    [
+        "⌜  ⌝",
+        " ⊛⊛ ",
+        " ╌╌ ",
+        " ╌╌ ",
+        "⌞  ⌟"
+    ];
+
+    static readonly string[] VertMoto2NoEv =
+    [
+        "⌜  ⌝",
+        " ⊛⊛ ",
+        " ⊛⊛ ",
+        " ╌╌ ",
+        "⌞  ⌟"
+    ];
+
+    static readonly string[] VertMoto3NoEv =
+    [
+        "⌜  ⌝",
+        " ⊛⊛ ",
+        " ⊛⊛ ",
+        " ⊛⊛ ",
+        "⌞  ⌟"
+    ];
+
+    static readonly string[] VertMoto1Ev =
+    [
+        "⌜ ↯⌝",
+        " ⊛⊛ ",
+        " ╌╌ ",
+        " ╌╌ ",
+        "⌞  ⌟"
+    ];
+
+    static readonly string[] VertMoto2Ev =
+    [
+        "⌜ ↯⌝",
+        " ⊛⊛ ",
+        " ⊛⊛ ",
+        " ╌╌ ",
+        "⌞  ⌟"
+    ];
+
+    static readonly string[] VertMoto3Ev =
+    [
+        "⌜ ↯⌝",
+        " ⊛⊛ ",
+        " ⊛⊛ ",
+        " ⊛⊛ ",
+        "⌞  ⌟"
+    ];
+
     // ── Glyph tables — horizontal 9×3 ────────────────────────────────────
 
     static readonly string[] HorizEmptyRightNoEv =

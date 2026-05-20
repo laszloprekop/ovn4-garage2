@@ -359,6 +359,7 @@ public static partial class GarageRenderer
     /// <seealso cref="GarageRenderer.Glyphs.cs"/>
     private static string[] GetSpotGlyph(ParkingSpot spot, GarageCell[,] grid, int r, int c)
     {
+        if (spot.IsMotorcycleMode) return GetMotorcycleGlyph(spot);
         if (!spot.IsEmpty) return GetOccupiedGlyph(spot);
         var facing = InferFacing(spot, grid, r, c);
         return (spot.Orientation, facing, spot.IsReserved, spot.HasEvCharger) switch
@@ -382,6 +383,20 @@ public static partial class GarageRenderer
             (Orientation.Horizontal, Facing.Left, true, false) => HorizResvLeftNoEv,
             (Orientation.Horizontal, Facing.Left, true, true) => HorizResvLeftEv,
             _ => ["?"],
+        };
+    }
+
+    private static string[] GetMotorcycleGlyph(ParkingSpot spot)
+    {
+        int count = spot.GetVehicles().Count();
+        return (count, spot.HasEvCharger) switch
+        {
+            (1, false) => VertMoto1NoEv,
+            (2, false) => VertMoto2NoEv,
+            (_, false) => VertMoto3NoEv,
+            (1, true)  => VertMoto1Ev,
+            (2, true)  => VertMoto2Ev,
+            (_, true)  => VertMoto3Ev,
         };
     }
 
