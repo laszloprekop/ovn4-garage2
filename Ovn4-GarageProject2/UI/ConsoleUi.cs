@@ -158,10 +158,21 @@ public class ConsoleUi : IUi
 
                         void DoFindRegNo()
                         {
-                            var v = _handler.FindByReg(regField.Text?.Trim() ?? "");
+                            var results = _handler.FindByReg(regField.Text.Trim() ?? "")
+                                .Select(v =>
+                                    $"{v.RegNumber,-10}  {v.GetType().Name,-12}  {v.Colour,-10} {v.WheelCount} wheel(s)")
+                                .ToList();
                             app.RequestStop(null);
-                            MessageBox.Query(app, "Result",
-                                v is not null ? $"{v.RegNumber}  {v.GetType().Name}  {v.Colour}" : "Not found.", "OK");
+
+                            var resultDialog = new Dialog
+                                { Title = $"Results ({results.Count})", Width = 60, Height = 20 };
+                            var list = new ListView { Width = Dim.Fill(), Height = Dim.Fill() - 2 };
+                            list.SetSource(
+                                new ObservableCollection<string>(results.Count > 0 ? results : ["No results found."]));
+                            var closeButton = new Button { Text = "Close", X = Pos.Center(), Y = Pos.Bottom(list) };
+                            closeButton.Accepting += (_, _) => app.RequestStop(null);
+                            resultDialog.Add(list, closeButton);
+                            app.Run(resultDialog);
                         }
 
                         okButton.Accepting += (_, _) => DoFindRegNo();

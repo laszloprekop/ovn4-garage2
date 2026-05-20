@@ -67,8 +67,12 @@ public class GarageHandler : IHandler
         return anchor.Id;
     }
 
-    public Vehicle? FindByReg(string regNumber) => _garage?.GetAll()
-        .FirstOrDefault(v => v.RegNumber.Equals(regNumber, StringComparison.OrdinalIgnoreCase));
+    public IEnumerable<Vehicle> FindByReg(string partialRegNumber) =>
+        _garage?.GetAll()
+            .Where(v => v.RegNumber.Contains(
+                partialRegNumber,
+                StringComparison.OrdinalIgnoreCase))
+        ?? Enumerable.Empty<Vehicle>();
 
     private ParkingSpot? FindFreeSpot(int width, int height, Type? requiredType = null)
     {
@@ -89,17 +93,14 @@ public class GarageHandler : IHandler
         return null;
     }
 
-    public IEnumerable<Vehicle> Search(string? colour, string? wheelCount, Type? vehicleType)
-    {
-        IEnumerable<Vehicle> results = _garage?.GetAll() ?? Enumerable.Empty<Vehicle>();
-        if (!string.IsNullOrWhiteSpace(colour))
-            results = results.Where(v => v.Colour.Equals(colour, StringComparison.OrdinalIgnoreCase));
-        if (!string.IsNullOrWhiteSpace(wheelCount))
-            results = results.Where(v => v.WheelCount.Equals(wheelCount, StringComparison.OrdinalIgnoreCase));
-        if (vehicleType is not null)
-            results = results.Where(v => v.GetType() == vehicleType);
-        return results;
-    }
+    public IEnumerable<Vehicle> Search(string? colour, string? wheelCount, Type? vehicleType) =>
+        _garage?.GetAll()
+            .Where(v =>
+                (colour is null || v.Colour.Contains(colour, StringComparison.OrdinalIgnoreCase)) &&
+                (wheelCount is null || v.WheelCount.Contains(wheelCount, StringComparison.OrdinalIgnoreCase)) &&
+                (vehicleType is null || v.GetType() == vehicleType))
+        ?? Enumerable.Empty<Vehicle>();
+
 
     private static bool RectangleFree(GarageCell[,] grid, int startRow, int startCol, int width, int height,
         Type? requiredType)

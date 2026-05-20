@@ -14,6 +14,6 @@ public interface IHandler
     /// <returns>The anchor spot's ID on success, or <see langword="null"/> if parking failed.</returns>
     int? Park(Vehicle vehicle);
     bool Remove(string regNumber);
-    Vehicle? FindByReg(string regNumber);
+    IEnumerable<Vehicle> FindByReg(string partialRegNumber);
     IEnumerable<Vehicle> Search(string? colour, string? wheelCount, Type? vehicleType);
 }
