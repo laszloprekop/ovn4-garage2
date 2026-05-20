@@ -194,6 +194,25 @@ public static partial class GarageRenderer
     // ── Bus — 9×15 (two spots tall + separator row) ───────────────────────
     // Not yet wired into GetGlyph — bus bays currently render as a single 'B'.
     // Zone-spanning render requires detecting the full bay extent at plan time.
+    private static readonly string[] BusTwoByThreeEmpty =
+    [
+        "⌜       ⌝",
+        "         ",
+        "         ",
+        "         ",
+        "         ",
+        " ┌╮╷╷╭╮  ",
+        " │││││   ",
+        " ├┤││╰╮  ",
+        " ││││ │  ",
+        " └╯╰╯╰╯  ",
+        "         ",
+        "         ",
+        "         ",
+        "         ",
+        "⌞       ⌟"
+    ];
+
     private static readonly string[] BusTwoByThree =
     [
         "╭╭━───━╮╮",
@@ -212,4 +231,12 @@ public static partial class GarageRenderer
         "▌╯█████╰▐",
         "╰━─────━╯",
     ];
+
+    // 5-row slices used by GetBusGlyph so each logical slot renders one third of the sprite.
+    private static readonly string[] BusTwoByThreeEmptyTop = BusTwoByThreeEmpty[..5];
+    private static readonly string[] BusTwoByThreeEmptyMid = BusTwoByThreeEmpty[5..10];
+    private static readonly string[] BusTwoByThreeEmptyBot = BusTwoByThreeEmpty[10..];
+    private static readonly string[] BusTwoByThreeTop = BusTwoByThree[..5];
+    private static readonly string[] BusTwoByThreeMid = BusTwoByThree[5..10];
+    private static readonly string[] BusTwoByThreeBot = BusTwoByThree[10..];
 }

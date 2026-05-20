@@ -61,6 +61,19 @@ public static partial class GarageRenderer
             if (grid[r, c] is ParkingSpot { Id: var id } && id == highlightSpotId)
             {
                 var rect = plan[(r, c)];
+                // Bus anchor: extend highlight to the bottom of the full zone.
+                if (grid[r, c] is ParkingSpot { AllowedVehicleType: var t } && t == typeof(Bus))
+                {
+                    int lastRow = r;
+                    while (lastRow + 1 < logRows
+                           && grid[lastRow + 1, c] is ParkingSpot { AllowedVehicleType: var nt }
+                           && nt == typeof(Bus))
+                        lastRow++;
+                    var last = plan[(lastRow, c)];
+                    return (lines, new SpotHighlight(rect.CharRow, rect.CharCol,
+                        last.CharRow + last.CharHeight - rect.CharRow, rect.CharWidth));
+                }
+
                 return (lines, new SpotHighlight(rect.CharRow, rect.CharCol, rect.CharHeight, rect.CharWidth));
             }
         }
@@ -96,6 +109,8 @@ public static partial class GarageRenderer
         int logRows = grid.GetLength(0);
         int logCols = grid.GetLength(1);
 
+        var busSatellites = ComputeBusSatellites(grid);
+
         var rowH = new int[logRows];
         for (int r = 0; r < logRows; r++)
         for (int c = 0; c < logCols; c++)
@@ -104,7 +119,7 @@ public static partial class GarageRenderer
         var colW = new int[logCols];
         for (int c = 0; c < logCols; c++)
         for (int r = 0; r < logRows; r++)
-            colW[c] = Math.Max(colW[c], CharWidth(grid[r, c]));
+            colW[c] = Math.Max(colW[c], CharWidth(grid[r, c], busSatellites));
 
         // Detect parking orientations for lane sizing.
         bool hasVert = false, hasHoriz = false;
@@ -200,13 +215,36 @@ public static partial class GarageRenderer
     };
 
     /// <summary>Returns the character width of <paramref name="cell"/>'s sprite.</summary>
-    private static int CharWidth(GarageCell? cell) => cell switch
+    private static int CharWidth(GarageCell? cell, HashSet<int> busSatellites) => cell switch
     {
-        ParkingSpot { AllowedVehicleType: var t } when t == typeof(Bus) => 1,
+        ParkingSpot { AllowedVehicleType: var t } s when t == typeof(Bus) && busSatellites.Contains(s.Id) => 0,
+        ParkingSpot { AllowedVehicleType: var t } when t == typeof(Bus) => 9,
         ParkingSpot { Orientation: Orientation.Vertical } => 4,
         ParkingSpot { Orientation: Orientation.Horizontal } => 9,
         _ => 1,
     };
+
+    // Satellite = bus spot that has another bus spot immediately to its left.
+    private static HashSet<int> ComputeBusSatellites(GarageCell[,] grid)
+    {
+        int rows = grid.GetLength(0), cols = grid.GetLength(1);
+        var satellites = new HashSet<int>();
+        for (int r = 0; r < rows; r++)
+        for (int c = 1; c < cols; c++)
+        {
+            if (grid[r, c] is ParkingSpot
+                {
+                    AllowedVehicleType: var t
+                } spot && t == typeof(Bus)
+                       && grid[r, c - 1] is ParkingSpot
+                       {
+                           AllowedVehicleType: var lt
+                       } && lt == typeof(Bus))
+                satellites.Add(spot.Id);
+        }
+
+        return satellites;
+    }
 
     // ── Buffer ────────────────────────────────────────────────────────────
 
@@ -276,10 +314,42 @@ public static partial class GarageRenderer
             WallCell => ["░"],
             RoadCell { Glyph: var g } when g != ' ' => [$"{g}"],
             RoadCell => [" "],
-            ParkingSpot { AllowedVehicleType: var t } when t == typeof(Bus) => ["B"],
+            ParkingSpot { AllowedVehicleType: var t } spot when t == typeof(Bus) => GetBusGlyph(grid, r, c, spot),
             ParkingSpot spot => GetSpotGlyph(spot, grid, r, c),
             _ => [" "],
         };
+
+    // Returns the correct 5-row slice for an anchor bus cell, or [] for a satellite.
+    private static string[] GetBusGlyph(GarageCell[,] grid, int r, int c, ParkingSpot spot)
+    {
+        // Satellite: bus spot to the left → render nothing (anchor covers this area).
+        if (c > 0 && grid[r, c - 1] is ParkingSpot { AllowedVehicleType: var lt } && lt == typeof(Bus))
+            return [];
+
+        // Anchor: count adjacent bus rows above to pick the correct slice (0=top, 1=mid, 2=bot).
+        int slice = 0;
+        int nr = r - 1;
+        while (nr >= 0 && grid[nr, c] is ParkingSpot { AllowedVehicleType: var at } && at == typeof(Bus))
+        {
+            slice++;
+            nr--;
+        }
+
+        // Occupancy is read from the zone's top anchor so all slices agree,
+        // even when only one cell was seeded via ParkAtSpot.
+        bool isEmpty = grid[r - slice, c] is ParkingSpot top ? top.IsEmpty : spot.IsEmpty;
+
+        return (slice, isEmpty) switch
+        {
+            (0, true) => BusTwoByThreeEmptyTop,
+            (1, true) => BusTwoByThreeEmptyMid,
+            (2, true) => BusTwoByThreeEmptyBot,
+            (0, false) => BusTwoByThreeTop,
+            (1, false) => BusTwoByThreeMid,
+            (2, false) => BusTwoByThreeBot,
+            _ => [],
+        };
+    }
 
     /// <summary>
     /// Selects the correct empty or reserved sprite for <paramref name="spot"/> based on
