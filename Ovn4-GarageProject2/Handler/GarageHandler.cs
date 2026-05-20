@@ -60,6 +60,7 @@ public class GarageHandler : IHandler
     public int? Park(Vehicle vehicle)
     {
         if (_garage is null) return null;
+        if (string.IsNullOrWhiteSpace(vehicle.RegNumber)) return null;
         if (GetAllVehicles().Any(v => v.RegNumber.Equals(vehicle.RegNumber, StringComparison.OrdinalIgnoreCase)))
             return null;
 

@@ -114,7 +114,13 @@ public class ConsoleUi : IUi
 
                         void DoPark()
                         {
-                            var vehicle = CreateVehicle(types[typeList.SelectedItem ?? 0], regField.Text?.Trim() ?? "");
+                            if (string.IsNullOrWhiteSpace(regField.Text))
+                            {
+                                MessageBox.ErrorQuery(app, "Validation", "Registration number cannot be empty.", "OK");
+                                return;
+                            }
+
+                            var vehicle = CreateVehicle(types[typeList.SelectedItem ?? 0], regField.Text.Trim());
                             parkedSpotId = _handler.Park(vehicle);
                             app.RequestStop(null);
                             MessageBox.Query(app, "Result",
@@ -148,7 +154,13 @@ public class ConsoleUi : IUi
 
                         void DoRemove()
                         {
-                            removed = _handler.Remove(regField.Text?.Trim() ?? "");
+                            if (string.IsNullOrWhiteSpace(regField.Text))
+                            {
+                                MessageBox.ErrorQuery(app, "Validation", "Registration number cannot be empty.", "OK");
+                                return;
+                            }
+
+                            removed = _handler.Remove(regField.Text.Trim());
                             app.RequestStop(null);
                             MessageBox.Query(app, "Result",
                                 removed ? "Vehicle removed." : "No vehicle with that registration found.", "OK");
@@ -177,7 +189,13 @@ public class ConsoleUi : IUi
 
                         void DoFindRegNo()
                         {
-                            var results = _handler.FindByReg(regField.Text?.Trim() ?? "")
+                            if (string.IsNullOrWhiteSpace(regField.Text))
+                            {
+                                MessageBox.ErrorQuery(app, "Validation", "Registration number cannot be empty.", "OK");
+                                return;
+                            }
+
+                            var results = _handler.FindByReg(regField.Text.Trim())
                                 .Select(v =>
                                     $"{v.RegNumber,-10}  {v.GetType().Name,-12}  {v.Colour,-10} {v.WheelCount} wheel(s)")
                                 .ToList();
