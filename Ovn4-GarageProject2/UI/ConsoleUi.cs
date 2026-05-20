@@ -26,9 +26,24 @@ public class ConsoleUi : IUi
 
         using IApplication app = Application.Create().Init();
 
-        var mapView = new GarageMapView(_handler.GetGrid())
+        string BuildStats() =>
+            _handler.GetVehicleTypeCounts().Any()
+                ? "  " + string.Join("   ", _handler.GetVehicleTypeCounts()
+                    .OrderBy(t => t.Type)
+                    .Select(t => $"{t.Type}: {t.Count}"))
+                : "  (garage empty)";
+
+        var statsLine = new Label
         {
             X = 0, Y = 1,
+            Width = Dim.Fill(),
+            Height = 1,
+            Text = BuildStats(),
+        };
+
+        var mapView = new GarageMapView(_handler.GetGrid())
+        {
+            X = 0, Y = 2,
             Width = Dim.Fill(),
             Height = Dim.Fill(),
             Visible = false,
@@ -36,7 +51,7 @@ public class ConsoleUi : IUi
 
         var spriteView = new SpriteView(GarageRenderer.Render(_handler.GetGrid()))
         {
-            X = 0, Y = 1,
+            X = 0, Y = 2,
             Width = Dim.Fill(),
             Height = Dim.Fill(),
         };
@@ -68,6 +83,7 @@ public class ConsoleUi : IUi
                         // update the view to the new garage
                         spriteView.Rebuild(GarageRenderer.Render(_handler.GetGrid()));
                         mapView.Rebuild(_handler.GetGrid());
+                        statsLine.Text = BuildStats();
                     }),
                     new MenuItem("_List Vehicles", "", () =>
                     {
@@ -140,6 +156,7 @@ public class ConsoleUi : IUi
                                 _handler.GetGrid(), parkedSpotId.Value);
                             spriteView.Rebuild(lines, highlight);
                             mapView.Rebuild(_handler.GetGrid());
+                            statsLine.Text = BuildStats();
                         }
                     }, null),
                     new MenuItem("_Remove Vehicle", "", () =>
@@ -177,6 +194,7 @@ public class ConsoleUi : IUi
                         {
                             spriteView.Rebuild(GarageRenderer.Render(_handler.GetGrid()));
                             mapView.Rebuild(_handler.GetGrid());
+                            statsLine.Text = BuildStats();
                         }
                     }, null),
                     new MenuItem("_Find by RegistrationNumber", "", () =>
@@ -273,7 +291,7 @@ public class ConsoleUi : IUi
         };
 
         var win = new Window { Title = "Garage 2.0" };
-        win.Add(menu, mapView, spriteView);
+        win.Add(menu, statsLine, mapView, spriteView);
         app.Run(win);
         win.Dispose();
     }
