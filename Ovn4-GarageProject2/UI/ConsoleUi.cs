@@ -106,6 +106,33 @@ public class ConsoleUi : IUi
                             mapView.Rebuild(_handler.GetGrid());
                         }
                     }, null),
+                    new MenuItem("_Remove Vehicle", "", () =>
+                    {
+                        var dialog = new Dialog { Title = "Remove Vehicle", Width = 44, Height = 8 };
+                        var regLabel = new Label { Text = "Registration number:", X = 1, Y = 1 };
+                        var regField = new TextField { X = 1, Y = 3, Width = 20 };
+                        var okButton = new Button { Text = "Remove", X = 1, Y = 5 };
+                        var cancelButton = new Button { Text = "Cancel", X = 11, Y = 5 };
+
+                        bool removed = false;
+                        okButton.Accepting += (_, _) =>
+                        {
+                            removed = _handler.Remove(regField.Text.Trim());
+                            app.RequestStop(null);
+                            MessageBox.Query(app, "Result",
+                                removed ? "Vehicle removed." : "No vehicle with that registration found.", "OK");
+                        };
+                        cancelButton.Accepting += (_, _) => app.RequestStop(null);
+
+                        dialog.Add(regLabel, regField, okButton, cancelButton);
+                        app.Run(dialog);
+
+                        if (removed)
+                        {
+                            spriteView.Rebuild(GarageRenderer.Render(_handler.GetGrid()));
+                            mapView.Rebuild(_handler.GetGrid());
+                        }
+                    }, null),
                     new MenuItem("_Toggle Renderer", "", () =>
                     {
                         showingSprite = !showingSprite;

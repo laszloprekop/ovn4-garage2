@@ -37,6 +37,16 @@ public class GarageHandler : IHandler
             .Select(g => (Type: g.Key, Count: g.Count()))
         ?? Enumerable.Empty<(string, int)>();
 
+    public bool Remove(string regNumber)
+    {
+        if (_garage is null) return false;
+        bool found = false;
+        foreach (var spot in _garage.GetGrid().Cast<GarageCell>().OfType<ParkingSpot>())
+            if (spot.TryUnpark(regNumber))
+                found = true;
+        return found;
+    }
+
     public int? Park(Vehicle vehicle)
     {
         if (_garage is null) return null;
