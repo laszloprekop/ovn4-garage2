@@ -68,6 +68,19 @@ public class GarageHandler : IHandler
             return reserved.Id;
         }
 
+        if (vehicle is Motorcycle)
+        {
+            var partial = _garage.GetGrid().Cast<GarageCell>()
+                .OfType<ParkingSpot>()
+                .FirstOrDefault(s => s.IsMotorcycleMode && s.GetVehicles().Count() < 3);
+            // First motorcycle session is tracked on the GarageCell, the last two separately
+            if (partial is not null && partial.TryPark(vehicle))
+            {
+                var ms = new ParkingSession(partial.Id, vehicle.RegNumber, DateTime.Now);
+                _sessions.Add(ms);
+                return partial.Id;
+            }
+        }
         var (width, height) = Footprints.GetValueOrDefault(vehicle.GetType(), (1, 1));
         Type? requiredZone = vehicle is Bus or Airplane ? vehicle.GetType() : null;
         var anchor = FindFreeSpot(width, height, requiredZone);
