@@ -335,8 +335,7 @@ public static partial class GarageRenderer
             nr--;
         }
 
-        // Occupancy is read from the zone's top anchor so all slices agree,
-        // even when only one cell was seeded via ParkAtSpot.
+        // Occupancy is read from the zone's top anchor so all slices agree.
         bool isEmpty = grid[r - slice, c] is ParkingSpot top ? top.IsEmpty : spot.IsEmpty;
 
         return (slice, isEmpty) switch
