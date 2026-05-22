@@ -1,4 +1,5 @@
 using Ovn4_GarageProject2.Domain;
+using Ovn4_GarageProject2.Layouts;
 
 namespace Ovn4_GarageProject2.Handler;
 
@@ -6,6 +7,7 @@ public interface IHandler
 {
     IEnumerable<Vehicle> GetAllVehicles();
     GarageCell[,] GetGrid();
+    GarageLayout GetLayout();
     IEnumerable<(string Type, int Count)> GetVehicleTypeCounts();
 
     /// <summary>

@@ -1,4 +1,5 @@
 using Ovn4_GarageProject2.Domain;
+using Ovn4_GarageProject2.Layouts;
 
 namespace Ovn4_GarageProject2.Handler;
 
@@ -18,6 +19,7 @@ public class GarageHandler : IHandler
     public void SetGarage(IGarage garage) => _garage = garage;
 
     public GarageCell[,] GetGrid() => _garage?.GetGrid() ?? new GarageCell[0, 0];
+    public GarageLayout GetLayout() => _garage?.Layout ?? new GarageLayout(new GarageCell[0, 0], [], [], [], [], []);
 
     public IEnumerable<Vehicle> GetAllVehicles() =>
         _garage?.GetAll() ?? Enumerable.Empty<Vehicle>();

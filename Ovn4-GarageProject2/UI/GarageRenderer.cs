@@ -1,3 +1,5 @@
+using Ovn4_GarageProject2.Layouts;
+
 namespace Ovn4_GarageProject2.UI;
 
 using Domain;
@@ -8,9 +10,7 @@ using Domain;
 /// <remarks>
 /// The rendering pipeline has four stages:
 /// <list type="number">
-///   <item><description><see cref="BuildRenderPlan"/> — assigns a character-space bounding rectangle to every logical cell.</description></item>
 ///   <item><description><see cref="AllocateBuffer"/> — allocates the backing <c>char[,]</c> array, filled with spaces.</description></item>
-///   <item><description><see cref="WriteToBuffer"/> — stamps each cell's glyph into the buffer.</description></item>
 ///   <item><description><see cref="BufferToLines"/> — serialises rows to right-trimmed strings.</description></item>
 /// </list>
 /// <para>
@@ -25,337 +25,91 @@ using Domain;
 /// </remarks>
 public static partial class GarageRenderer
 {
-    /// <summary>The character-space bounding rectangle of a single parking spot, used for highlight overlays.</summary>
     public record SpotHighlight(int CharRow, int CharCol, int CharHeight, int CharWidth);
 
-    /// <summary>
-    /// Renders <paramref name="grid"/> into an array of text lines ready for terminal display.
-    /// </summary>
-    /// <param name="grid">The logical grid of garage cells produced by <see cref="LayoutParser"/>.</param>
-    /// <returns>One string per character row, right-trimmed of trailing spaces.</returns>
-    public static string[] Render(GarageCell[,] grid)
+    public static string[] Render(GarageLayout layout)
     {
-        var plan = BuildRenderPlan(grid);
-        var buffer = AllocateBuffer(plan);
-        WriteToBuffer(grid, plan, buffer);
+        var buffer = AllocateBuffer(layout.LogicalGrid);
+        RenderBaseCells(layout.LogicalGrid, buffer);
+        PaintBayAnchors(layout, buffer);
+        WriteBorderStrips(layout, buffer);
         return BufferToLines(buffer);
     }
 
-    /// <summary>
-    /// Renders <paramref name="grid"/> and also returns the character-space rectangle of the spot
-    /// with <paramref name="highlightSpotId"/>, so the caller can apply a colour overlay to that region.
-    /// </summary>
-    /// <returns>The rendered lines and the highlight rectangle, or <see langword="null"/> if the spot is not found.</returns>
     public static (string[] Lines, SpotHighlight? Highlight) RenderWithHighlight(
-        GarageCell[,] grid, int highlightSpotId)
+        GarageLayout layout, int highlightSpotId)
     {
-        var plan = BuildRenderPlan(grid);
-        var buffer = AllocateBuffer(plan);
-        WriteToBuffer(grid, plan, buffer);
+        var buffer = AllocateBuffer(layout.LogicalGrid);
+        RenderBaseCells(layout.LogicalGrid, buffer); // pass 1
+        PaintBayAnchors(layout, buffer); // pass 2
+        ReplaceStripePadding(layout, buffer);
+        WriteBorderStrips(layout, buffer); // pass 3
         var lines = BufferToLines(buffer);
 
+        var grid = layout.LogicalGrid;
         int logRows = grid.GetLength(0), logCols = grid.GetLength(1);
         for (int r = 0; r < logRows; r++)
         for (int c = 0; c < logCols; c++)
         {
-            if (grid[r, c] is ParkingSpot { Id: var id } && id == highlightSpotId)
-            {
-                var rect = plan[(r, c)];
-                // Bus anchor: extend highlight to the bottom of the full zone.
-                if (grid[r, c] is ParkingSpot { AllowedVehicleType: var t } && t == typeof(Bus))
-                {
-                    int lastRow = r;
-                    while (lastRow + 1 < logRows
-                           && grid[lastRow + 1, c] is ParkingSpot { AllowedVehicleType: var nt }
-                           && nt == typeof(Bus))
-                        lastRow++;
-                    var last = plan[(lastRow, c)];
-                    return (lines, new SpotHighlight(rect.CharRow, rect.CharCol,
-                        last.CharRow + last.CharHeight - rect.CharRow, rect.CharWidth));
-                }
-
-                return (lines, new SpotHighlight(rect.CharRow, rect.CharCol, rect.CharHeight, rect.CharWidth));
-            }
+            if (grid[r, c] is not ParkingSpot { Id: var id } || id != highlightSpotId) continue;
+            var bay = layout.BayAnchors.FirstOrDefault(anchor => anchor.Row == r && anchor.Col == c);
+            int spanRows = bay?.SpanRows ?? 1;
+            int spanCols = bay?.SpanCols ?? 1;
+            return (lines, new SpotHighlight(r * 6 + 1, c * 5 + 1, spanRows * 6, spanCols * 5));
         }
 
         return (lines, null);
     }
 
-    // ── Render plan ───────────────────────────────────────────────────────
 
-    /// <summary>Character-space bounding rectangle for one logical cell.</summary>
-    private record CellRect(int CharRow, int CharCol, int CharHeight, int CharWidth);
-
-    /// <summary>
-    /// Computes a character-space bounding rectangle for every logical cell in <paramref name="grid"/>.
-    /// </summary>
-    /// <remarks>
-    /// Three passes refine the initial 1×1 defaults:
-    /// <list type="number">
-    ///   <item><description>Parking-spot dimensions set spot columns to 4 or 9 wide and spot rows to 5 or 3 tall.</description></item>
-    ///   <item><description>Lane-column pass: columns that contain a plain road cell (<c>' '</c>) in a spot row
-    ///     are widened to <c>laneW</c> (5 for vertical garages, 10 for horizontal).
-    ///     Separator columns are implicitly excluded because they hold <c>│</c>, not <c>' '</c>, in spot rows.</description></item>
-    ///   <item><description>Lane-row pass: rows that contain a plain road cell in a spot column are heightened to
-    ///     <c>laneH</c> (5 for vertical garages, 3 for horizontal).
-    ///     A snapshot of column widths taken before pass 2 (<c>spotColW</c>) prevents expanded lane
-    ///     columns from incorrectly qualifying wall rows as lane rows.</description></item>
-    /// </list>
-    /// </remarks>
-    /// <param name="grid">The logical grid to analyse.</param>
-    /// <returns>A dictionary mapping each <c>(row, col)</c> index to its <see cref="CellRect"/>.</returns>
-    private static Dictionary<(int r, int c), CellRect> BuildRenderPlan(GarageCell[,] grid)
-    {
-        int logRows = grid.GetLength(0);
-        int logCols = grid.GetLength(1);
-
-        var busSatellites = ComputeBusSatellites(grid);
-
-        var rowH = new int[logRows];
-        for (int r = 0; r < logRows; r++)
-        for (int c = 0; c < logCols; c++)
-            rowH[r] = Math.Max(rowH[r], CharHeight(grid[r, c]));
-
-        var colW = new int[logCols];
-        for (int c = 0; c < logCols; c++)
-        for (int r = 0; r < logRows; r++)
-            colW[c] = Math.Max(colW[c], CharWidth(grid[r, c], busSatellites));
-
-        // Detect parking orientations for lane sizing.
-        bool hasVert = false, hasHoriz = false;
-        for (int r = 0; r < logRows; r++)
-        for (int c = 0; c < logCols; c++)
-        {
-            if (grid[r, c] is ParkingSpot { Orientation: Orientation.Vertical }) hasVert = true;
-            if (grid[r, c] is ParkingSpot { Orientation: Orientation.Horizontal }) hasHoriz = true;
-        }
-
-        int laneW = hasHoriz ? 10 : hasVert ? 5 : 1;
-        int laneH = hasVert ? 5 : hasHoriz ? 3 : 1;
-
-        // Snapshot initial colW so the row-pass can identify spot columns.
-        var spotColW = (int[])colW.Clone();
-
-        // Expand lane columns: a lane column has a plain-road cell in a spot row (rowH > 1).
-        // Separator columns (│ etc.) have only their glyph char in spot rows, never ' ',
-        // so the Glyph: ' ' pattern already excludes them — no extra wall check needed.
-        for (int c = 0; c < logCols; c++)
-        {
-            if (colW[c] > 1) continue;
-            bool hasParking = false, isLaneCol = false;
-            for (int r = 0; r < logRows; r++)
-            {
-                if (grid[r, c] is ParkingSpot) hasParking = true;
-                if (rowH[r] > 1 && grid[r, c] is RoadCell { Glyph: ' ' }) isLaneCol = true;
-            }
-
-            if (!hasParking && isLaneCol) colW[c] = laneW;
-        }
-
-        // Expand lane rows: a lane row has a plain-road cell in a spot column (spotColW > 1).
-        // Bus spots (CharHeight == 1) do NOT count as hasParking — they live in lane rows.
-        // Separator rows (containing ─ ┼ etc.) are excluded.
-        for (int r = 0; r < logRows; r++)
-        {
-            if (rowH[r] > 1) continue;
-            bool hasParking = false, hasSep = false, isLaneRow = false;
-            for (int c = 0; c < logCols; c++)
-            {
-                if (CharHeight(grid[r, c]) > 1) hasParking = true;
-                if (grid[r, c] is RoadCell rc && IsSeparatorGlyph(rc.Glyph)) hasSep = true;
-                if (spotColW[c] > 1 && grid[r, c] is RoadCell { Glyph: ' ' }) isLaneRow = true;
-            }
-
-            if (!hasParking && !hasSep && isLaneRow) rowH[r] = laneH;
-        }
-
-        int[] rowY = CumulativeSum(rowH);
-        int[] colX = CumulativeSum(colW);
-
-        var plan = new Dictionary<(int, int), CellRect>();
-        for (int r = 0; r < logRows; r++)
-        for (int c = 0; c < logCols; c++)
-            plan[(r, c)] = new CellRect(rowY[r], colX[c], rowH[r], colW[c]);
-
-        return plan;
-    }
-
-    /// <summary>Converts an array of slot sizes into an array of cumulative start offsets.</summary>
-    private static int[] CumulativeSum(int[] sizes)
-    {
-        var offsets = new int[sizes.Length];
-        for (int i = 1; i < sizes.Length; i++)
-            offsets[i] = offsets[i - 1] + sizes[i - 1];
-        return offsets;
-    }
-
-    /// <summary>
-    /// Returns <see langword="true"/> if <paramref name="g"/> is a box-drawing separator character
-    /// (<c>│ ─ ┼ ├ ┤ ┬ ┴</c>).
-    /// </summary>
-    private static bool IsSeparatorGlyph(char g) =>
-        g is '│' or '─' or '┼' or '├' or '┤' or '┬' or '┴';
-
-    // ── Character dimensions ──────────────────────────────────────────────
-
-    /// <summary>
-    /// Returns the character height of <paramref name="cell"/>'s sprite.
-    /// </summary>
-    /// <remarks>
-    /// Bus spots are matched before the general vertical case because <see cref="LayoutParser"/>
-    /// assigns <see cref="Orientation.Vertical"/> as the default orientation, which would
-    /// otherwise give bus spots a height of 5 instead of 1.
-    /// </remarks>
-    private static int CharHeight(GarageCell? cell) => cell switch
-    {
-        ParkingSpot { AllowedVehicleType: var t } when t == typeof(Bus) => 1,
-        ParkingSpot { Orientation: Orientation.Vertical } => 5,
-        ParkingSpot { Orientation: Orientation.Horizontal } => 3,
-        _ => 1,
-    };
-
-    /// <summary>Returns the character width of <paramref name="cell"/>'s sprite.</summary>
-    private static int CharWidth(GarageCell? cell, HashSet<int> busSatellites) => cell switch
-    {
-        ParkingSpot { AllowedVehicleType: var t } s when t == typeof(Bus) && busSatellites.Contains(s.Id) => 0,
-        ParkingSpot { AllowedVehicleType: var t } when t == typeof(Bus) => 9,
-        ParkingSpot { Orientation: Orientation.Vertical } => 4,
-        ParkingSpot { Orientation: Orientation.Horizontal } => 9,
-        _ => 1,
-    };
-
-    // Satellite = bus spot that has another bus spot immediately to its left.
-    private static HashSet<int> ComputeBusSatellites(GarageCell[,] grid)
-    {
-        int rows = grid.GetLength(0), cols = grid.GetLength(1);
-        var satellites = new HashSet<int>();
-        for (int r = 0; r < rows; r++)
-        for (int c = 1; c < cols; c++)
-        {
-            if (grid[r, c] is ParkingSpot
-                {
-                    AllowedVehicleType: var t
-                } spot && t == typeof(Bus)
-                       && grid[r, c - 1] is ParkingSpot
-                       {
-                           AllowedVehicleType: var lt
-                       } && lt == typeof(Bus))
-                satellites.Add(spot.Id);
-        }
-
-        return satellites;
-    }
 
     // ── Buffer ────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Allocates a <c>char[,]</c> large enough to hold every cell described by <paramref name="plan"/>,
-    /// initialised with spaces.
-    /// </summary>
-    private static char[,] AllocateBuffer(Dictionary<(int r, int c), CellRect> plan)
+    private static char[,] AllocateBuffer(GarageCell[,] grid)
     {
-        int totalRows = plan.Values.Max(rect => rect.CharRow + rect.CharHeight);
-        int totalCols = plan.Values.Max(rect => rect.CharCol + rect.CharWidth);
-        var buffer = new char[totalRows, totalCols];
-        for (int r = 0; r < totalRows; r++)
-        for (int c = 0; c < totalCols; c++)
+        // 1,1 - top left border row
+        int bufferHeight = 1 + grid.GetLength(0) * 6, bufferWidth = 1 + grid.GetLength(1) * 5;
+
+        var buffer = new char[bufferHeight, bufferWidth];
+        for (int r = 0; r < bufferHeight; r++)
+        for (int c = 0; c < bufferWidth; c++)
             buffer[r, c] = ' ';
+
         return buffer;
     }
 
-    /// <summary>Iterates every logical cell and writes its glyph into <paramref name="buffer"/>.</summary>
-    private static void WriteToBuffer(GarageCell[,] grid, Dictionary<(int, int), CellRect> plan, char[,] buffer)
+    // painter
+    private static void RenderBaseCells(GarageCell[,] grid, char[,] buffer)
     {
-        int logRows = grid.GetLength(0);
-        int logCols = grid.GetLength(1);
-        for (int r = 0; r < logRows; r++)
-        for (int c = 0; c < logCols; c++)
+        int logicalRows = grid.GetLength(0);
+        int logicalCols = grid.GetLength(1);
+        for (int row = 0; row < logicalRows; row++)
+        for (int col = 0; col < logicalCols; col++)
         {
-            var rect = plan[(r, c)];
-            WriteGlyph(buffer, rect.CharRow, rect.CharCol, GetGlyph(grid, r, c), rect.CharHeight, rect.CharWidth);
+            var glyph = GetGlyph(grid, row, col);
+            if (glyph.Length == 0) continue; // when road or bus - no stamp
+            StampGlyph(buffer, row * 6 + 1, col * 5 + 1, glyph);
         }
     }
 
-    /// <summary>
-    /// Writes <paramref name="glyph"/> into <paramref name="buffer"/> at the given position.
-    /// </summary>
-    /// <remarks>
-    /// Single-character glyphs (walls, separators) are <em>tiled</em> to fill the entire
-    /// <paramref name="slotH"/>×<paramref name="slotW"/> slot, so lane columns and lane rows
-    /// always display a continuous surface rather than isolated symbols.
-    /// Multi-character glyphs (parking-spot sprites) are written verbatim, top-left aligned.
-    /// </remarks>
-    private static void WriteGlyph(char[,] buffer, int startRow, int startCol,
-        string[] glyph, int slotH, int slotW)
-    {
-        if (glyph.Length == 1 && glyph[0].Length == 1)
-        {
-            // Single-char cell: tile to fill the entire slot (separators, walls).
-            char ch = glyph[0][0];
-            for (int gr = 0; gr < slotH; gr++)
-            for (int gc = 0; gc < slotW; gc++)
-                buffer[startRow + gr, startCol + gc] = ch;
-            return;
-        }
-
-        for (int gr = 0; gr < glyph.Length; gr++)
-        for (int gc = 0; gc < glyph[gr].Length; gc++)
-            buffer[startRow + gr, startCol + gc] = glyph[gr][gc];
-    }
 
     // ── Glyph selection ───────────────────────────────────────────────────
 
-    /// <summary>
-    /// Returns the sprite rows for the cell at <c>grid[<paramref name="r"/>, <paramref name="c"/>]</c>.
-    /// </summary>
     private static string[] GetGlyph(GarageCell[,] grid, int r, int c) =>
         grid[r, c] switch
         {
-            WallCell => ["░"],
-            RoadCell { Glyph: var g } when g != ' ' => [$"{g}"],
-            RoadCell => [" "],
-            ParkingSpot { AllowedVehicleType: var t } spot when t == typeof(Bus) => GetBusGlyph(grid, r, c, spot),
+            RoadCell => [],
+            ParkingSpot { AllowedVehicleType: var t } when t == typeof(Bus) => [],
             ParkingSpot spot => GetSpotGlyph(spot, grid, r, c),
-            _ => [" "],
-        };
-
-    // Returns the correct 5-row slice for an anchor bus cell, or [] for a satellite.
-    private static string[] GetBusGlyph(GarageCell[,] grid, int r, int c, ParkingSpot spot)
-    {
-        // Satellite: bus spot to the left → render nothing (anchor covers this area).
-        if (c > 0 && grid[r, c - 1] is ParkingSpot { AllowedVehicleType: var lt } && lt == typeof(Bus))
-            return [];
-
-        // Anchor: count adjacent bus rows above to pick the correct slice (0=top, 1=mid, 2=bot).
-        int slice = 0;
-        int nr = r - 1;
-        while (nr >= 0 && grid[nr, c] is ParkingSpot { AllowedVehicleType: var at } && at == typeof(Bus))
-        {
-            slice++;
-            nr--;
-        }
-
-        // Occupancy is read from the zone's top anchor so all slices agree.
-        bool isEmpty = grid[r - slice, c] is ParkingSpot top ? top.IsEmpty : spot.IsEmpty;
-
-        return (slice, isEmpty) switch
-        {
-            (0, true) => BusTwoByThreeEmptyTop,
-            (1, true) => BusTwoByThreeEmptyMid,
-            (2, true) => BusTwoByThreeEmptyBot,
-            (0, false) => BusTwoByThreeTop,
-            (1, false) => BusTwoByThreeMid,
-            (2, false) => BusTwoByThreeBot,
             _ => [],
         };
-    }
+
 
     /// <summary>
     /// Selects the correct empty or reserved sprite for <paramref name="spot"/> based on
     /// orientation, inferred entry facing, reserved flag, and EV-charger flag.
     /// </summary>
     /// <seealso cref="InferFacing"/>
-    /// <seealso cref="GarageRenderer.Glyphs.cs"/>
     private static string[] GetSpotGlyph(ParkingSpot spot, GarageCell[,] grid, int r, int c)
     {
         if (spot.IsMotorcycleMode) return GetMotorcycleGlyph(spot);
@@ -385,6 +139,170 @@ public static partial class GarageRenderer
         };
     }
 
+    // Grid render Pass 1
+    private static void StampGlyph(char[,] buffer, int startRow, int startCol, string[] glyph)
+    {
+        int glyphH = glyph.Length;
+        int glyphW = glyph.Max(row => row.Length);
+
+        // Glyph fits the grid perfectly.
+        if (glyphH % 6 == 0 && glyphW % 5 == 0)
+        {
+            for (int gr = 0; gr < glyphH; gr++)
+            for (int gc = 0; gc < glyphW; gc++)
+            {
+                buffer[startRow + gr, startCol + gc] = glyph[gr][gc];
+            }
+
+            return;
+        }
+
+        // Safety fitting: round to nearest cell side multiple, center content, add `·` padding
+        int cellH = (int)Math.Ceiling(glyphH / 6.0) * 6;
+        int cellW = (int)Math.Ceiling(glyphW / 5.0) * 5;
+        // center ascii art (minus padding
+        int offR = (cellH - 1 - glyphH) / 2;
+        int offC = (cellW - 1 - glyphW) / 2;
+
+        for (int gr = 0; gr < glyphH; gr++)
+        for (int gc = 0; gc < glyph[gr].Length; gc++)
+        {
+            buffer[startRow + offR + gr, startCol + offC + gc] = glyph[gr][gc];
+        }
+
+        // write padding placeholder
+        for (int gr = 0; gr < cellH; gr++) buffer[startRow + gr, startCol + cellW - 1] = '·';
+        for (int gc = 0; gc < cellW; gc++) buffer[startRow + cellH - 1, startCol + gc] = '·';
+    }
+
+
+    // Grid render Pass 2
+    private static void PaintBayAnchors(GarageLayout layout, char[,] buffer)
+    {
+        foreach (var anchor in layout.BayAnchors)
+        {
+            bool isEmpty = layout.LogicalGrid[anchor.Row, anchor.Col] is not ParkingSpot spot || spot.IsEmpty;
+            var sprite = (anchor.SpanRows, anchor.SpanCols, isEmpty) switch
+            {
+                (3, 2, true) => BusTwoByThreeEmpty,
+                (3, 2, false) => BusTwoByThree,
+                _ => Array.Empty<string>(),
+            };
+            if (sprite.Length == 0) continue;
+            StampGlyph(buffer, anchor.Row * 6 + 1, anchor.Col * 5 + 1, sprite);
+        }
+    }
+
+    // Grid render Pass 3
+    private static void ReplaceStripePadding(GarageLayout layout, char[,] buffer)
+    {
+        var grid = layout.LogicalGrid;
+        int logicalRows = grid.GetLength(0), logicalCols = grid.GetLength(1);
+
+        for (int row = 0; row < logicalRows; row++)
+        for (int col = 0; col < logicalCols; col++)
+        {
+            // is inside a multi-cell?
+            var bay = layout.BayAnchors.FirstOrDefault(anchor =>
+                row >= anchor.Row && row < anchor.Row + anchor.SpanRows &&
+                col >= anchor.Col && col < anchor.Col + anchor.SpanCols);
+            bool isLastBayCol = bay is null || col == bay.Col + bay.SpanCols - 1;
+            bool isLastBayRow = bay is null || row == bay.Row + bay.SpanRows - 1;
+
+            int bufferRow = row * 6 + 1, bufferCol = col * 5 + 1;
+
+            // When to skip interior bay columns
+            if (isLastBayCol)
+            {
+                char ch = RightEdgeChar(grid, layout.RightWall, row, col, logicalCols);
+                for (int dr = 0; dr < 5; dr++) buffer[bufferRow + dr, bufferCol + 4] = ch;
+            }
+
+            // when to skip interior bay rows
+            if (isLastBayRow)
+            {
+                char ch = BottomEdgeChar(grid, layout.BottomWall, row, col, logicalRows);
+                for (int dc = 0; dc < 4; dc++) buffer[bufferRow + 5, bufferCol + dc] = ch;
+            }
+
+            // corner at outer bottom-right?
+            if (isLastBayCol && isLastBayRow)
+                buffer[bufferRow + 5, bufferCol + 4] = CornerChar(grid, layout, row, col, logicalRows, logicalCols);
+        }
+    }
+
+    private static char RightEdgeChar(GarageCell[,] grid, char[] rightWall, int r, int c, int logicalCols)
+    {
+        bool atEdge = c + 1 >= logicalCols;
+        bool wallRight = atEdge ? rightWall[r] == '░' : grid[r, c + 1] is WallCell;
+        if (wallRight) return '░';
+        bool spotHere = grid[r, c] is ParkingSpot;
+        bool spotRight = !atEdge && grid[r, c + 1] is ParkingSpot;
+        return spotHere || spotRight ? '│' : ' ';
+    }
+
+    private static char BottomEdgeChar(GarageCell[,] grid, char[] bottomWall, int r, int c, int logicalRows)
+    {
+        bool atEdge = r + 1 >= logicalRows;
+        bool wallBelow = atEdge ? bottomWall[c] == '░' : grid[r + 1, c] is WallCell;
+        if (wallBelow) return '░';
+        return grid[r, c] is ParkingSpot ? '─' : ' ';
+    }
+
+    private static char CornerChar(GarageCell[,] grid, GarageLayout layout, int r, int c, int logRows, int logCols)
+    {
+        bool rightOutOfBounds = c + 1 >= logCols;
+        bool bottomOutOfBounds = r + 1 >= logRows;
+
+        bool wallRight = rightOutOfBounds ? layout.RightWall[r] == '░' : grid[r, c + 1] is WallCell;
+        bool wallBottom = bottomOutOfBounds ? layout.BottomWall[c] == '░' : grid[r + 1, c] is WallCell;
+
+        if (wallRight || wallBottom) return '░';
+
+        bool tl = grid[r, c] is ParkingSpot;
+        bool tr = !rightOutOfBounds && grid[r, c + 1] is ParkingSpot;
+        bool bl = !bottomOutOfBounds && grid[r + 1, c] is ParkingSpot;
+        bool br = !rightOutOfBounds && !bottomOutOfBounds && grid[r + 1, c + 1] is ParkingSpot;
+
+        bool up = tl || tr;
+        bool down = bl || br;
+
+        if (!up || !down) return ' ';
+
+        return (tl, tr) switch // left-right connectors
+        {
+            (false, true) => '├',
+            (true, false) => '┤',
+            (true, true) => '┼',
+            _ => ' ',
+        };
+    }
+
+    private static void WriteBorderStrips(GarageLayout layout, char[,] buffer)
+    {
+        int logicalRows = layout.LogicalGrid.GetLength(0);
+        int logicalCols = layout.LogicalGrid.GetLength(1);
+
+        buffer[0, 0] = '░'; // top-left origin
+
+        // Top border, stretched x5
+        for (int c = 0; c < logicalCols; c++)
+        {
+            char ch = layout.TopWall[c];
+            for (int dc = 0; dc < 5; dc++)
+                buffer[0, c * 5 + 1 + dc] = ch;
+        }
+
+        // Left border stretched x6
+        for (int r = 0; r < logicalRows; r++)
+        {
+            char ch = layout.LeftWall[r];
+            for (int dr = 0; dr < 6; dr++)
+                buffer[r * 6 + 1 + dr, 0] = ch;
+        }
+        // right and bottom walls are dealt with populating placeholder `·`s
+    }
+
     private static string[] GetMotorcycleGlyph(ParkingSpot spot)
     {
         int count = spot.GetVehicles().Count();
@@ -393,9 +311,9 @@ public static partial class GarageRenderer
             (1, false) => VertMoto1NoEv,
             (2, false) => VertMoto2NoEv,
             (_, false) => VertMoto3NoEv,
-            (1, true)  => VertMoto1Ev,
-            (2, true)  => VertMoto2Ev,
-            (_, true)  => VertMoto3Ev,
+            (1, true) => VertMoto1Ev,
+            (2, true) => VertMoto2Ev,
+            (_, true) => VertMoto3Ev,
         };
     }
 

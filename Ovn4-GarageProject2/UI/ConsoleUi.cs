@@ -49,7 +49,7 @@ public class ConsoleUi : IUi
             Visible = false,
         };
 
-        var spriteView = new SpriteView(GarageRenderer.Render(_handler.GetGrid()))
+        var spriteView = new SpriteView(GarageRenderer.Render(_handler.GetLayout()))
         {
             X = 0, Y = 2,
             Width = Dim.Fill(),
@@ -81,7 +81,7 @@ public class ConsoleUi : IUi
                         app.Run(dialog);
 
                         // update the view to the new garage
-                        spriteView.Rebuild(GarageRenderer.Render(_handler.GetGrid()));
+                        spriteView.Rebuild(GarageRenderer.Render(_handler.GetLayout()));
                         mapView.Rebuild(_handler.GetGrid());
                         statsLine.Text = BuildStats();
                     }),
@@ -199,7 +199,7 @@ public class ConsoleUi : IUi
                         if (parkedSpotId.HasValue)
                         {
                             var (lines, highlight) = GarageRenderer.RenderWithHighlight(
-                                _handler.GetGrid(), parkedSpotId.Value);
+                                _handler.GetLayout(), parkedSpotId.Value);
                             spriteView.Rebuild(lines, highlight);
                             mapView.Rebuild(_handler.GetGrid());
                             statsLine.Text = BuildStats();
@@ -255,7 +255,7 @@ public class ConsoleUi : IUi
 
                         if (removed)
                         {
-                            spriteView.Rebuild(GarageRenderer.Render(_handler.GetGrid()));
+                            spriteView.Rebuild(GarageRenderer.Render(_handler.GetLayout()));
                             mapView.Rebuild(_handler.GetGrid());
                             statsLine.Text = BuildStats();
                         }

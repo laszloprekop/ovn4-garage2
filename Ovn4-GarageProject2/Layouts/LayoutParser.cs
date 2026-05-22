@@ -11,13 +11,13 @@ public static class LayoutParser
     {
         int rows = blueprint.Length;
         int cols = blueprint.Max(r => r.Length);
-        var grid = new GarageCell[rows, cols];
 
+        var fullGrid = new GarageCell[rows, cols];
         for (int r = 0; r < rows; r++)
         for (int c = 0; c < cols; c++)
         {
             char ch = c < blueprint[r].Length ? blueprint[r][c] : ' ';
-            grid[r, c] = ch switch
+            fullGrid[r, c] = ch switch
             {
                 '░' => new WallCell(),
                 _ when RoadChars.Contains(ch) => new RoadCell { Glyph = ch },
@@ -25,7 +25,60 @@ public static class LayoutParser
             };
         }
 
-        return new Garage<T>(name, grid);
+        // strip the perimeter walls for logical grid
+        int logicalRows = rows - 2, logicalCols = cols - 2;
+        var logicalGrid = new GarageCell[logicalRows, logicalCols];
+
+        for (int r = 1; r < rows - 1; r++)
+        for (int c = 1; c < cols - 1; c++)
+        {
+            logicalGrid[r - 1, c - 1] = fullGrid[r, c];
+        }
+
+        // Extract wall char arrays
+        char[] topWall = Enumerable.Range(1, logicalCols).Select(c => blueprint[0][c]).ToArray();
+        char[] bottomWall = Enumerable.Range(1, logicalCols).Select(c => blueprint[rows - 1][c]).ToArray();
+        char[] leftWall = Enumerable.Range(1, logicalRows).Select(r => blueprint[r][0]).ToArray();
+        char[] rightWall = Enumerable.Range(1, logicalRows)
+            .Select(r => r < blueprint.Length && cols - 1 < blueprint[r].Length
+                ? blueprint[r][cols - 1]
+                : '░').ToArray();
+
+        var layout = new GarageLayout(logicalGrid, topWall, bottomWall, leftWall, rightWall,
+            FindBayAnchors(logicalGrid));
+
+        return new Garage<T>(name, logicalGrid, layout);
+    }
+
+    private static BayAnchor[] FindBayAnchors(GarageCell[,] grid)
+    {
+        int rows = grid.GetLength(0), cols = grid.GetLength(1);
+        var seen = new HashSet<(int, int)>();
+        var anchors = new List<BayAnchor>();
+        for (int r = 0; r < rows; r++)
+        for (int c = 0; c < cols; c++)
+        {
+            if (!seen.Add((r, c))) continue;
+            if (grid[r, c] is not ParkingSpot { AllowedVehicleType: var t } || t != typeof(Bus)) continue;
+
+            int spanCols = 1;
+            while (c + spanCols < cols && grid[r, c + spanCols] is ParkingSpot { AllowedVehicleType: var tc } &&
+                   tc == t) spanCols++;
+
+            int spanRows = 1;
+            while (r + spanRows < rows && grid[r + spanRows, c] is ParkingSpot { AllowedVehicleType: var tr } &&
+                   tr == t) spanRows++;
+
+            for (int dr = 0; dr < spanRows; dr++)
+            for (int dc = 0; dc < spanCols; dc++)
+            {
+                seen.Add((r + dr, c + dc));
+            }
+
+            anchors.Add(new BayAnchor(r, c, spanRows, spanCols));
+        }
+
+        return [.. anchors];
     }
 
     private static ParkingSpot CreateSpot(char ch, int r, int c, int cols) =>
